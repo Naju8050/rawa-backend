@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RawaLab Command Center</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --surface: #111827;
+      --surface-border: #1f2937;
+      --text: #f9fafb;
+      --muted: #9ca3af;
+      --primary: #0284c7;
+      --primary-hover: #0369a1;
+      --accent: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --danger-hover: #dc2626;
+      --radius: 8px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background-color: var(--bg); color: var(--text); display: flex; height: 100vh; overflow: hidden; }
+
+    sidebar { width: 250px; background: var(--surface); border-right: 1px solid var(--surface-border); display: flex; flex-direction: column; justify-content: space-between; padding: 20px 14px; }
+    .brand { font-size: 1.25rem; font-weight: 700; color: #fff; padding: 0 8px 16px; border-bottom: 1px solid var(--surface-border); }
+    .brand span { color: #38bdf8; }
+    .nav-group { display: flex; flex-direction: column; gap: 6px; margin-top: 16px; }
+    .nav-btn { display: flex; align-items: center; width: 100%; padding: 10px 12px; background: transparent; border: none; color: var(--muted); border-radius: var(--radius); font-size: 0.88rem; font-weight: 500; cursor: pointer; text-align: left; }
+    .nav-btn:hover, .nav-btn.active { background: #1e293b; color: #fff; }
+    .nav-btn.active { color: #38bdf8; font-weight: 600; }
+
+    main { flex: 1; overflow-y: auto; padding: 24px 32px; display: flex; flex-direction: column; gap: 20px; }
+    header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 16px; border-bottom: 1px solid var(--surface-border); }
+    .page-title { font-size: 1.35rem; font-weight: 600; }
+
+    .view-section { display: none; flex-direction: column; gap: 16px; }
+    .view-section.active { display: flex; }
+    .card { background: var(--surface); border: 1px solid var(--surface-border); border-radius: var(--radius); padding: 18px; }
+    .card-title { font-size: 0.88rem; font-weight: 600; color: var(--muted); margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
+    
+    .grid-4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .chart-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 16px; }
+
+    .stat-val { font-size: 1.7rem; font-weight: 700; color: #fff; }
+    .stat-unit { font-size: 0.85rem; font-weight: 400; color: var(--muted); }
+
+    .form-row { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+    label { font-size: 0.75rem; font-weight: 600; color: var(--muted); text-transform: uppercase; }
+    input, select, textarea { width: 100%; background: #0b0f19; border: 1px solid var(--surface-border); border-radius: 6px; padding: 8px 10px; color: #fff; font-size: 0.85rem; outline: none; }
+    
+    .btn { background: var(--primary); color: #fff; border: none; padding: 8px 14px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 0.85rem; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+    .btn:hover { background: var(--primary-hover); }
+    .btn-danger { background: var(--danger); }
+    .btn-danger:hover { background: var(--danger-hover); }
+    .btn-accent { background: var(--accent); }
+    .btn-sm { padding: 4px 8px; font-size: 0.75rem; border-radius: 4px; }
+
+    .timeline-bar { display: flex; align-items: center; gap: 4px; background: #0b0f19; padding: 4px; border-radius: 6px; border: 1px solid var(--surface-border); }
+    .time-btn { background: transparent; border: none; color: var(--muted); padding: 5px 12px; font-size: 0.78rem; font-weight: 600; border-radius: 4px; cursor: pointer; }
+    .time-btn.active { background: #1e293b; color: #38bdf8; }
+
+    table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.82rem; }
+    th { color: var(--muted); padding: 10px; border-bottom: 1px solid var(--surface-border); font-weight: 600; }
+    td { padding: 10px; border-bottom: 1px solid var(--surface-border); }
+    tr:hover { background: #151e2e; }
+
+    .badge { display: inline-block; padding: 3px 8px; border-radius: 4px; font-size: 0.72rem; font-weight: 600; }
+    .badge-ok { background: #064e3b; color: #6ee7b7; }
+    .badge-err { background: #7f1d1d; color: #fca5a5; }
+    .badge-pump { background: #0284c7; color: #bae6fd; animation: pulse 1.5s infinite; }
+    
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    pre { background: #0b0f19; border: 1px solid var(--surface-border); padding: 12px; border-radius: 6px; color: #38bdf8; font-family: monospace; font-size: 0.8rem; overflow-x: auto; }
+  </style>
+</head>
+<body>
+
+  <sidebar>
+    <div>
+      <div class="brand">Rawa<span>Lab</span></div>
+      <div class="nav-group">
+        <button class="nav-btn active" onclick="switchView('telemetry-view')">📊 Live Telemetry</button>
+        <button class="nav-btn" onclick="switchView('users-view')">👥 User Directory</button>
+        <button class="nav-btn" onclick="switchView('orchards-view')">🌲 Orchards & Devices</button>
+        <button class="nav-btn" onclick="switchView('provision-view')">⚡ Provision Node</button>
+        <button class="nav-btn" onclick="switchView('simulator-view')">🛰️ Data Simulator</button>
+      </div>
+    </div>
+    <div style="font-size: 0.75rem; color: var(--muted);">Edge D1 Engine<br>Cutoff Voltage: 3.49V</div>
+  </sidebar>
+
+  <main>
+    <header>
+      <h1 class="page-title" id="viewTitle">Live Orchard Telemetry</h1>
+      <div style="display: flex; gap: 10px; align-items: center;">
+        <select id="activeOrchardSelect" style="width: 180px;" onchange="handleOrchardChange()">
+          <option value="">Select Orchard...</option>
+        </select>
+        <select id="activeDeviceFilter" style="width: 160px;" onchange="loadTelemetryData()">
+          <option value="">All Devices</option>
+        </select>
+        <button class="btn" style="background: #1e293b;" onclick="refreshContext()">↻</button>
+      </div>
+    </header>
+
+    <!-- VIEW 1: TELEMETRY & CONTROLS -->
+    <div id="telemetry-view" class="view-section active">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div style="font-size: 0.85rem; color: var(--muted);">Filter Timeline:</div>
+        <div class="timeline-bar">
+          <button class="time-btn active" onclick="setTimeframe('24h')">24 Hours</button>
+          <button class="time-btn" onclick="setTimeframe('7d')">1 Week</button>
+          <button class="time-btn" onclick="setTimeframe('30d')">1 Month</button>
+          <button class="time-btn" onclick="setTimeframe('all')">All Records</button>
+        </div>
+      </div>
+
+      <!-- MOTOR CONTROLLER REAL-TIME ACTUATION CARD -->
+      <div class="card" id="motorControlCard" style="display: none; border-left: 4px solid var(--accent);">
+        <div class="card-title">
+          <span>🚜 Motor Controller Panel (<span id="activeMotorDevId">--</span>)</span>
+          <span id="motorStatusBadge" class="badge">IDLE</span>
+        </div>
+        <div class="grid-2">
+          <!-- Immediate Command Dispatcher -->
+          <div style="background: #0b0f19; padding: 14px; border-radius: 6px; border: 1px solid var(--surface-border);">
+            <div style="font-size: 0.82rem; font-weight: 600; margin-bottom: 8px; color: #38bdf8;">MANUAL OVERRIDE: IRRIGATE NOW</div>
+            <div style="display: flex; gap: 8px;">
+              <input type="number" id="irrigateLiters" placeholder="Target Liters" value="250" style="flex: 2;">
+              <input type="number" id="irrigateZone" value="1" placeholder="Zone" style="flex: 1;">
+              <button class="btn btn-accent" id="btnPumpNow" onclick="triggerIrrigateNow(false)">Pump Now</button>
+              <button class="btn btn-danger" id="btnPumpStop" onclick="triggerIrrigateNow(true)">Stop</button>
+            </div>
+            <div id="irrigateFeedback" style="font-size: 0.75rem; margin-top: 8px; line-height: 1.4; color: var(--muted);"></div>
+          </div>
+
+          <!-- Schedule Sync -->
+          <div style="background: #0b0f19; padding: 14px; border-radius: 6px; border: 1px solid var(--surface-border);">
+            <div style="font-size: 0.82rem; font-weight: 600; margin-bottom: 8px; color: #38bdf8;">RECURRING SCHEDULE</div>
+            <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+              <input type="time" id="schedTime" value="06:00" style="flex: 1;">
+              <input type="number" id="schedLiters" placeholder="Liters" value="1000" style="flex: 1;">
+              <input type="number" id="schedZone" placeholder="Zone" value="1" style="flex: 1;">
+            </div>
+            <div style="display: flex; gap: 8px; margin-bottom: 10px; font-size: 0.75rem;">
+              <label><input type="checkbox" class="day-check" value="1" checked> M</label>
+              <label><input type="checkbox" class="day-check" value="2" checked> T</label>
+              <label><input type="checkbox" class="day-check" value="4" checked> W</label>
+              <label><input type="checkbox" class="day-check" value="8" checked> T</label>
+              <label><input type="checkbox" class="day-check" value="16" checked> F</label>
+              <label><input type="checkbox" class="day-check" value="32"> S</label>
+              <label><input type="checkbox" class="day-check" value="64"> S</label>
+            </div>
+            <button class="btn" id="btnSaveSchedule" onclick="saveSchedule()">Save Schedule & Notify HiveMQ</button>
+            <div id="scheduleFeedback" style="font-size: 0.75rem; margin-top: 8px; color: var(--muted);"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Metric Cards -->
+      <div class="grid-4">
+        <div class="card"><div class="card-title">Soil Moisture (Upper)</div><div class="stat-val" id="statVwcUpper">-- <span class="stat-unit">%</span></div></div>
+        <div class="card"><div class="card-title">Root Zone Moisture</div><div class="stat-val" id="statVwcRoot">-- <span class="stat-unit">%</span></div></div>
+        <div class="card"><div class="card-title">Temperature</div><div class="stat-val" id="statSoilTemp">-- <span class="stat-unit">°C</span></div></div>
+        <div class="card"><div class="card-title">System Voltage</div><div class="stat-val" id="statBattery">-- <span class="stat-unit">V</span></div></div>
+      </div>
+
+      <!-- Master Overlay Chart -->
+      <div class="card">
+        <div class="card-title">
+          <span>Master Telemetry Overlay</span>
+          <span style="font-size: 0.75rem; color: var(--muted); font-weight: normal;">Chronological series</span>
+        </div>
+        <div style="height: 320px;"><canvas id="masterCombinedChart"></canvas></div>
+      </div>
+
+      <!-- Separate Individual Charts -->
+      <div style="font-size: 0.95rem; font-weight: 600; color: var(--muted);">Individual Sensor Channels</div>
+      <div class="chart-grid" id="individualChartsGrid"></div>
+
+      <!-- Log Table -->
+      <div class="card">
+        <div class="card-title">Telemetry Packets Log (<span id="recordCount">0</span> records)</div>
+        <table>
+          <thead>
+            <tr><th>Timestamp</th><th>Device ID</th><th>Type</th><th>Battery</th><th>Status</th><th>Sensor Data</th></tr>
+          </thead>
+          <tbody id="telemetryLogTable"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- VIEW 2: USERS DIRECTORY -->
+    <div id="users-view" class="view-section">
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">Register Grower</div>
+          <div class="form-row"><label>Full Name</label><input type="text" id="usrName" placeholder="Bashir Ahmad"></div>
+          <div class="form-row"><label>Email</label><input type="email" id="usrEmail" placeholder="bashir@rawalab.com"></div>
+          <div class="form-row"><label>Phone</label><input type="text" id="usrPhone" placeholder="+91 9906000000"></div>
+          <button class="btn" onclick="submitNewUser()">Create Account</button>
+        </div>
+        <div class="card">
+          <div class="card-title">Registered Accounts</div>
+          <table>
+            <thead><tr><th>ID</th><th>Grower</th><th>Role</th><th>Action</th></tr></thead>
+            <tbody id="usersTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- VIEW 3: ORCHARDS & DEVICES -->
+    <div id="orchards-view" class="view-section">
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">Add Orchard</div>
+          <div class="form-row"><label>Owner Account</label><select id="orchardOwnerSelect"></select></div>
+          <div class="form-row"><label>Block Name</label><input type="text" id="orchName" placeholder="Sopore Block C"></div>
+          <div class="form-row"><label>Area (Acres)</label><input type="number" id="orchArea" value="5.0" step="0.1"></div>
+          <button class="btn" onclick="submitNewOrchard()">Register Block</button>
+        </div>
+        <div class="card">
+          <div class="card-title">Orchard Blocks</div>
+          <table>
+            <thead><tr><th>ID</th><th>Name</th><th>Owner</th><th>Action</th></tr></thead>
+            <tbody id="orchardsTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Hardware Nodes Registry</div>
+        <table>
+          <thead>
+            <tr><th>Device ID</th><th>Type</th><th>Orchard</th><th>Battery</th><th>Last Ping</th><th>Action</th></tr>
+          </thead>
+          <tbody id="devicesTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- VIEW 4: PROVISIONING -->
+    <div id="provision-view" class="view-section">
+      <div class="card" style="max-width: 600px;">
+        <div class="card-title">Provision Node</div>
+        <div class="form-row"><label>Assign Orchard</label><select id="provOrchardSelect"></select></div>
+        <div class="form-row"><label>Hardware ID</label><input type="text" id="provDeviceId" placeholder="MC-01"></div>
+        <div class="form-row">
+          <label>Type</label>
+          <select id="provType">
+            <option value="motorController">motorController</option>
+            <option value="soilsens">soilsens</option>
+            <option value="soilsensPro">soilsensPro</option>
+            <option value="weatherStation">weatherStation</option>
+            <option value="tanksens">tanksens</option>
+            <option value="rainSens">rainSens</option>
+          </select>
+        </div>
+        <button class="btn" onclick="submitProvisionDevice()">Flash & Deploy</button>
+        <div id="provisionResult" style="display: none; margin-top: 14px;">
+          <div style="font-size: 0.8rem; color: #38bdf8; margin-bottom: 6px;">Copy this API key to paste into Serial Monitor:</div>
+          <pre id="provisionTokenDisplay"></pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- VIEW 5: DATA SIMULATOR -->
+    <div id="simulator-view" class="view-section">
+      <div class="card" style="max-width: 600px;">
+        <div class="card-title">Manual Edge Telemetry Dispatcher</div>
+        <div class="form-row"><label>Device</label><select id="simDeviceSelect" onchange="populateSim()"></select></div>
+        <div class="form-row"><label>API Key</label><input type="text" id="simApiKey"></div>
+        <div class="form-row"><label>Battery (V)</label><input type="number" id="simBat" value="3.92" step="0.01"></div>
+        <div class="form-row"><label>Sensors (JSON)</label><textarea id="simSensors" rows="5"></textarea></div>
+        <button class="btn" onclick="sendSimulatorTelemetry()">Inject Telemetry</button>
+        <div id="simResult" style="display: none; margin-top: 14px;"><pre id="simResultOutput"></pre></div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    // ⚠️ UPDATE THIS WITH YOUR LIVE CLOUDFLARE WORKER HOST
+    const API_URL = "https://rawalab-api.najeebshafins-ns.workers.dev";
+
+    let combinedChartInstance = null;
+    let separateChartInstances = {};
+    let cachedDevices = [];
+    let currentTimeframe = "24h";
+
+    const COLOR_PALETTE = ['#0284c7', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316', '#14b8a6'];
+
+    function switchView(viewId) {
+      document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
+      document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
+      document.getElementById(viewId).classList.add('active');
+      event.currentTarget.classList.add('active');
+
+      const titles = {
+        'telemetry-view': 'Live Orchard Telemetry',
+        'users-view': 'Grower User Directory',
+        'orchards-view': 'Orchards & Hardware Registry',
+        'provision-view': 'Node Provisioning',
+        'simulator-view': 'Telemetry Dispatcher'
+      };
+      document.getElementById('viewTitle').innerText = titles[viewId];
+    }
+
+    function setTimeframe(range) {
+      currentTimeframe = range;
+      document.querySelectorAll('.time-btn').forEach(b => b.classList.remove('active'));
+      event.currentTarget.classList.add('active');
+      loadTelemetryData();
+    }
+
+    async function refreshContext() {
+      await Promise.all([loadUsers(), loadOrchards(), loadDevices()]);
+      loadTelemetryData();
+    }
+
+    async function loadUsers() {
+      const res = await fetch(`${API_URL}/v1/users`);
+      const users = await res.json();
+      const tbody = document.getElementById("usersTableBody");
+      const ownerSel = document.getElementById("orchardOwnerSelect");
+      tbody.innerHTML = "";
+      ownerSel.innerHTML = "";
+
+      users.forEach(u => {
+        tbody.innerHTML += `
+          <tr>
+            <td><strong>${u.user_id}</strong></td>
+            <td>${u.full_name}</td>
+            <td>${u.role}</td>
+            <td><button class="btn btn-danger btn-sm" onclick="deleteItem('users', '${u.user_id}')">Delete</button></td>
+          </tr>
+        `;
+        ownerSel.innerHTML += `<option value="${u.user_id}">${u.full_name}</option>`;
+      });
+    }
+
+    async function loadOrchards() {
+      const res = await fetch(`${API_URL}/v1/orchards`);
+      const orchards = await res.json();
+      const tbody = document.getElementById("orchardsTableBody");
+      const selActive = document.getElementById("activeOrchardSelect");
+      const selProv = document.getElementById("provOrchardSelect");
+
+      tbody.innerHTML = "";
+      selActive.innerHTML = `<option value="">Select Orchard...</option>`;
+      selProv.innerHTML = "";
+
+      orchards.forEach(o => {
+        tbody.innerHTML += `
+          <tr>
+            <td><strong>${o.orchard_id}</strong></td>
+            <td>${o.name}</td>
+            <td>${o.owner_name}</td>
+            <td><button class="btn btn-danger btn-sm" onclick="deleteItem('orchards', '${o.orchard_id}')">Delete</button></td>
+          </tr>
+        `;
+        selActive.innerHTML += `<option value="${o.orchard_id}">${o.name}</option>`;
+        selProv.innerHTML += `<option value="${o.orchard_id}">${o.name}</option>`;
+      });
+
+      if (orchards.length > 0 && !selActive.value) {
+        selActive.value = orchards[0].orchard_id;
+        handleOrchardChange();
+      }
+    }
+
+    async function loadDevices() {
+      const res = await fetch(`${API_URL}/v1/devices`);
+      cachedDevices = await res.json();
+      const tbody = document.getElementById("devicesTableBody");
+      const simSel = document.getElementById("simDeviceSelect");
+      tbody.innerHTML = "";
+      simSel.innerHTML = `<option value="">Select Device...</option>`;
+
+      cachedDevices.forEach(d => {
+        tbody.innerHTML += `
+          <tr>
+            <td><strong>${d.device_id}</strong></td>
+            <td>${d.device_type}</td>
+            <td>${d.orchard_name}</td>
+            <td>${d.battery_v ? d.battery_v + 'V' : '--'}</td>
+            <td>${d.last_ping ? new Date(d.last_ping * 1000).toLocaleTimeString() : 'Never'}</td>
+            <td><button class="btn btn-danger btn-sm" onclick="deleteItem('devices', '${d.device_id}')">Delete</button></td>
+          </tr>
+        `;
+        simSel.innerHTML += `<option value="${d.device_id}">${d.device_id}</option>`;
+      });
+    }
+
+    function handleOrchardChange() {
+      const orchardId = document.getElementById("activeOrchardSelect").value;
+      const devFilter = document.getElementById("activeDeviceFilter");
+      devFilter.innerHTML = `<option value="">All Devices</option>`;
+
+      const orchardDevs = cachedDevices.filter(d => d.orchard_id === orchardId);
+      orchardDevs.forEach(d => {
+        devFilter.innerHTML += `<option value="${d.device_id}">${d.device_id} (${d.device_type})</option>`;
+      });
+
+      loadTelemetryData();
+    }
+
+    async function deleteItem(type, id) {
+      if (!confirm(`Are you sure you want to delete ${type.slice(0, -1)} '${id}'? This will remove all associated records.`)) return;
+      const res = await fetch(`${API_URL}/v1/${type}/${id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (data.success) refreshContext(); else alert(data.error);
+    }
+
+    async function loadTelemetryData() {
+      const orchardId = document.getElementById("activeOrchardSelect").value;
+      const deviceFilter = document.getElementById("activeDeviceFilter").value;
+      if (!orchardId) return;
+
+      const res = await fetch(`${API_URL}/v1/orchards/telemetry?orchard_id=${orchardId}&range=${currentTimeframe}`);
+      let packets = await res.json();
+
+      if (deviceFilter) {
+        packets = packets.filter(p => p.device_id === deviceFilter);
+      }
+
+      inspectMotorController(packets);
+
+      const tbody = document.getElementById("telemetryLogTable");
+      tbody.innerHTML = "";
+      document.getElementById("recordCount").innerText = packets.length;
+
+      if (packets.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--muted);">No packets recorded for this timeframe.</td></tr>`;
+        document.getElementById("statVwcUpper").innerHTML = `-- <span class="stat-unit">%</span>`;
+        document.getElementById("statVwcRoot").innerHTML = `-- <span class="stat-unit">%</span>`;
+        document.getElementById("statSoilTemp").innerHTML = `-- <span class="stat-unit">°C</span>`;
+        document.getElementById("statBattery").innerHTML = `-- <span class="stat-unit">V</span>`;
+        clearAllCharts();
+        return;
+      }
+
+      const latest = packets[0];
+      document.getElementById("statVwcUpper").innerHTML = `${latest.sensors.vwc_upper ?? '--'} <span class="stat-unit">%</span>`;
+      document.getElementById("statVwcRoot").innerHTML = `${latest.sensors.vwc_root ?? '--'} <span class="stat-unit">%</span>`;
+      document.getElementById("statSoilTemp").innerHTML = `${latest.sensors.soil_temp ?? latest.sensors.air_temp ?? '--'} <span class="stat-unit">°C</span>`;
+      document.getElementById("statBattery").innerHTML = `${latest.battery_v ?? '--'} <span class="stat-unit">V</span>`;
+
+      packets.slice(0, 50).forEach(p => {
+        const isLow = p.battery_v && p.battery_v <= 3.49;
+        const d = new Date(p.recorded_at * 1000);
+        const dateString = currentTimeframe === "24h" 
+          ? d.toLocaleTimeString() 
+          : `${d.getMonth() + 1}/${d.getDate()} ${d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
+
+        tbody.innerHTML += `
+          <tr>
+            <td>${dateString}</td>
+            <td><strong>${p.device_id}</strong></td>
+            <td>${p.device_type}</td>
+            <td>${p.battery_v ? p.battery_v + 'V' : '--'}</td>
+            <td>${isLow ? '<span class="badge badge-err">Low Bat</span>' : '<span class="badge badge-ok">OK</span>'}</td>
+            <td><code>${JSON.stringify(p.sensors)}</code></td>
+          </tr>
+        `;
+      });
+
+      renderAllVisualizations(packets);
+    }
+
+    function inspectMotorController(packets) {
+      const panel = document.getElementById("motorControlCard");
+      const motorPacket = packets.find(p => p.device_type === "motorController");
+
+      if (motorPacket) {
+        panel.style.display = "block";
+        document.getElementById("activeMotorDevId").innerText = motorPacket.device_id;
+        const badge = document.getElementById("motorStatusBadge");
+        const status = motorPacket.sensors.status || "IDLE";
+        badge.innerText = `${status} (${motorPacket.sensors.liters_delivered || 0} L)`;
+        badge.className = status === "PUMPING" ? "badge badge-pump" : "badge badge-ok";
+      } else {
+        panel.style.display = "none";
+      }
+    }
+
+    async function triggerIrrigateNow(isStop) {
+      const devId = document.getElementById("activeMotorDevId").innerText;
+      const liters = parseInt(document.getElementById("irrigateLiters").value);
+      const zone = parseInt(document.getElementById("irrigateZone").value) || 1;
+      const feedback = document.getElementById("irrigateFeedback");
+      const btnPump = document.getElementById("btnPumpNow");
+      const btnStop = document.getElementById("btnPumpStop");
+
+      btnPump.disabled = true;
+      btnStop.disabled = true;
+      feedback.style.color = "var(--muted)";
+      feedback.innerText = "Transmitting to edge router...";
+
+      try {
+        const res = await fetch(`${API_URL}/v1/devices/irrigate-now`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ device_id: devId, liters, zone, stop: isStop })
+        });
+        const data = await res.json();
+
+        if (!data.success) {
+          feedback.style.color = "var(--danger)";
+          feedback.innerText = `Error: ${data.error}`;
+          return;
+        }
+
+        if (data.mqtt_dispatched) {
+          feedback.style.color = "var(--accent)";
+          feedback.innerText = isStop 
+            ? "✓ Stop command delivered via HiveMQ MQTT (Real-time)" 
+            : `✓ Dispatched: ${liters}L via HiveMQ MQTT (Real-time)`;
+        } else {
+          feedback.style.color = "var(--warning)";
+          feedback.innerText = `⚠️ Saved to KV (Fallback), but MQTT failed: ${data.mqtt_error}`;
+        }
+      } catch (err) {
+        feedback.style.color = "var(--danger)";
+        feedback.innerText = `Network Exception: ${err.message}`;
+      } finally {
+        btnPump.disabled = false;
+        btnStop.disabled = false;
+      }
+    }
+
+    async function saveSchedule() {
+      const devId = document.getElementById("activeMotorDevId").innerText;
+      const time = document.getElementById("schedTime").value;
+      const liters = parseInt(document.getElementById("schedLiters").value);
+      const zone = parseInt(document.getElementById("schedZone").value) || 1;
+      const feedback = document.getElementById("scheduleFeedback");
+      const btn = document.getElementById("btnSaveSchedule");
+
+      let bitmask = 0;
+      document.querySelectorAll(".day-check:checked").forEach(cb => bitmask += parseInt(cb.value));
+
+      btn.disabled = true;
+      feedback.style.color = "var(--muted)";
+      feedback.innerText = "Saving schedule...";
+
+      try {
+        const res = await fetch(`${API_URL}/v1/devices/schedules`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ device_id: devId, schedules: [{ time, days: bitmask, liters, zone }] })
+        });
+        const data = await res.json();
+
+        if (!data.success) {
+          feedback.style.color = "var(--danger)";
+          feedback.innerText = `Error: ${data.error}`;
+          return;
+        }
+
+        if (data.mqtt_dispatched) {
+          feedback.style.color = "var(--accent)";
+          feedback.innerText = "✓ Schedule written to KV & HiveMQ SYNC notification sent";
+        } else {
+          feedback.style.color = "var(--warning)";
+          feedback.innerText = `⚠️ Schedule written to KV, but HiveMQ notification failed: ${data.mqtt_error}`;
+        }
+      } catch (err) {
+        feedback.style.color = "var(--danger)";
+        feedback.innerText = `Network error: ${err.message}`;
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    function clearAllCharts() {
+      if (combinedChartInstance) combinedChartInstance.destroy();
+      Object.keys(separateChartInstances).forEach(k => {
+        if (separateChartInstances[k]) separateChartInstances[k].destroy();
+      });
+      separateChartInstances = {};
+      document.getElementById("individualChartsGrid").innerHTML = "";
+    }
+
+    function renderAllVisualizations(packets) {
+      clearAllCharts();
+      const chronological = [...packets].reverse();
+
+      const timeLabels = chronological.map(p => {
+        const d = new Date(p.recorded_at * 1000);
+        return currentTimeframe === "24h"
+          ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          : `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:00`;
+      });
+
+      const sensorKeys = new Set();
+      chronological.forEach(p => {
+        if (p.sensors) {
+          Object.keys(p.sensors).forEach(k => {
+            if (typeof p.sensors[k] === 'number' && k !== 'error') sensorKeys.add(k);
+          });
+        }
+        if (p.battery_v) sensorKeys.add("battery_v");
+      });
+
+      const sensorKeysArray = Array.from(sensorKeys);
+
+      const combinedDatasets = sensorKeysArray.map((key, idx) => {
+        const color = COLOR_PALETTE[idx % COLOR_PALETTE.length];
+        return {
+          label: key,
+          data: chronological.map(p => key === "battery_v" ? p.battery_v : p.sensors?.[key] ?? null),
+          borderColor: color,
+          tension: 0.2,
+          borderWidth: 2,
+          pointRadius: packets.length > 50 ? 0 : 2
+        };
+      });
+
+      const ctxCombined = document.getElementById("masterCombinedChart").getContext("2d");
+      combinedChartInstance = new Chart(ctxCombined, {
+        type: 'line',
+        data: { labels: timeLabels, datasets: combinedDatasets },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: { grid: { color: '#1f2937' }, ticks: { color: '#9ca3af' } },
+            y: { grid: { color: '#1f2937' }, ticks: { color: '#9ca3af' } }
+          },
+          plugins: { legend: { labels: { color: '#f9fafb' } } }
+        }
+      });
+
+      const grid = document.getElementById("individualChartsGrid");
+      sensorKeysArray.forEach((key, idx) => {
+        const color = COLOR_PALETTE[idx % COLOR_PALETTE.length];
+        const canvasId = `chart_indiv_${key}`;
+        const card = document.createElement("div");
+        card.className = "card";
+        card.innerHTML = `
+          <div class="card-title"><span>${key}</span><span style="color:${color};font-family:monospace;">●</span></div>
+          <div style="height: 200px;"><canvas id="${canvasId}"></canvas></div>
+        `;
+        grid.appendChild(card);
+
+        const ctxIndiv = document.getElementById(canvasId).getContext("2d");
+        separateChartInstances[key] = new Chart(ctxIndiv, {
+          type: 'line',
+          data: {
+            labels: timeLabels,
+            datasets: [{
+              label: key,
+              data: chronological.map(p => key === "battery_v" ? p.battery_v : p.sensors?.[key] ?? null),
+              borderColor: color,
+              backgroundColor: color + '15',
+              fill: true,
+              tension: 0.2,
+              borderWidth: 2
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+              x: { grid: { color: '#1f2937' }, ticks: { color: '#9ca3af' } },
+              y: { grid: { color: '#1f2937' }, ticks: { color: '#9ca3af' } }
+            },
+            plugins: { legend: { display: false } }
+          }
+        });
+      });
+    }
+
+    async function submitNewUser() {
+      const full_name = document.getElementById("usrName").value;
+      const email = document.getElementById("usrEmail").value;
+      const phone = document.getElementById("usrPhone").value;
+      await fetch(`${API_URL}/v1/users`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ full_name, email, phone })
+      });
+      refreshContext();
+    }
+
+    async function submitNewOrchard() {
+      const user_id = document.getElementById("orchardOwnerSelect").value;
+      const name = document.getElementById("orchName").value;
+      const total_area_acres = parseFloat(document.getElementById("orchArea").value);
+      await fetch(`${API_URL}/v1/orchards`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id, name, total_area_acres })
+      });
+      refreshContext();
+    }
+
+    async function submitProvisionDevice() {
+      const orchard_id = document.getElementById("provOrchardSelect").value;
+      const device_id = document.getElementById("provDeviceId").value;
+      const device_type = document.getElementById("provType").value;
+
+      const res = await fetch(`${API_URL}/v1/devices`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orchard_id, device_id, device_type })
+      });
+      const data = await res.json();
+      if (data.success) {
+        document.getElementById("provisionResult").style.display = "block";
+        document.getElementById("provisionTokenDisplay").innerText = data.device_api_key;
+        refreshContext();
+      } else {
+        alert(data.error);
+      }
+    }
+
+    function populateSim() {
+      const devId = document.getElementById("simDeviceSelect").value;
+      const dev = cachedDevices.find(d => d.device_id === devId);
+      if (!dev) return;
+
+      if (dev.device_type === "motorController") {
+        document.getElementById("simSensors").value = JSON.stringify({ supply_v: 12.4, status: "IDLE", liters_delivered: 0, error: 0 }, null, 2);
+      } else {
+        document.getElementById("simSensors").value = JSON.stringify({ vwc_upper: 33.5, vwc_root: 37.2, soil_temp: 18.0, light: 45000, error: 0 }, null, 2);
+      }
+    }
+
+    async function sendSimulatorTelemetry() {
+      const device_id = document.getElementById("simDeviceSelect").value;
+      const api_key = document.getElementById("simApiKey").value;
+      const battery_v = parseFloat(document.getElementById("simBat").value);
+      const sensors = JSON.parse(document.getElementById("simSensors").value);
+
+      const res = await fetch(`${API_URL}/v1/ingest`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ device_id, api_key, battery_v, sensors })
+      });
+      const data = await res.json();
+      document.getElementById("simResult").style.display = "block";
+      document.getElementById("simResultOutput").innerText = JSON.stringify(data, null, 2);
+      loadTelemetryData();
+    }
+
+    refreshContext();
+  </script>
+</body>
+</html>
